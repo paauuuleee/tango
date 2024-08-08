@@ -7,7 +7,7 @@ import "core:strings"
 TargetFile :: struct {
 	fd:        os.Handle,
 	name:      string,
-	folder:    string,
+	directory: string,
 	type:      string,
 	source:    [dynamic]string,
 	includes:  [dynamic]string,
@@ -16,37 +16,25 @@ TargetFile :: struct {
 	depends:   [dynamic]string,
 }
 
-TargetFileError :: enum {
-	None,
-	ExistError,
-	NonExistError,
-	ReadError,
-	WriteError,
-	OpenError,
-	CloseError,
-	CreateError,
-	ParseError,
-}
-
-create_target_file :: proc(name, folder, type: string) -> (TargetFile, TargetFileError) {
+create_target_file :: proc(name, directory, type: string) -> (TargetFile, Error) {
 	if os.exists(fmt.tprintf("./%s.tango", name)) {return TargetFile{}, .ExistError}
 
 	fd, errno := os.open(fmt.tprintf("./%s.tango", name), os.O_CREATE | os.O_RDWR, 0o0644)
 	if errno != 0 {return TargetFile{}, .CreateError}
 
-	return TargetFile{fd = fd, name = name, folder = folder, type = type}, .None
+	return TargetFile{fd = fd, name = name, directory = directory, type = type}, .None
 }
 
-close_target_file :: proc(target_file: TargetFile) -> TargetFileError {
+close_target_file :: proc(target_file: TargetFile) -> Error {
 	if os.close(target_file.fd) != 0 {return .CloseError}
 	return .None
 }
 
-write_target_file :: proc(target_file: TargetFile) -> TargetFileError {
+write_target_file :: proc(target_file: TargetFile) -> Error {
 	target_file_content := fmt.tprintf(
-		"target %s\nfolder %s\ntype %s\n",
+		"target %s\ndirectory %s\ntype %s\n",
 		target_file.name,
-		target_file.folder,
+		target_file.directory,
 		target_file.type,
 	)
 
@@ -95,7 +83,7 @@ write_target_file :: proc(target_file: TargetFile) -> TargetFileError {
 	return .None
 }
 
-read_target_file :: proc(target_name: string) -> (TargetFile, TargetFileError) {
+read_target_file :: proc(target_name: string) -> (TargetFile, Error) {
 	if !os.exists(fmt.tprintf("./%s.tango", target_name)) {
 		return TargetFile{}, .NonExistError
 	}
@@ -126,9 +114,9 @@ read_target_file :: proc(target_name: string) -> (TargetFile, TargetFileError) {
 	i += 1
 
 	line_elems = strings.split(target_lines[i], " ")
-	if len(line_elems) != 2 || line_elems[0] != "folder" {return TargetFile{}, .ParseError}
+	if len(line_elems) != 2 || line_elems[0] != "directory" {return TargetFile{}, .ParseError}
 	if !os.is_dir(line_elems[1]) {return TargetFile{}, .ParseError}
-	target_file.folder = line_elems[1]
+	target_file.directory = line_elems[1]
 	i += 1
 
 	line_elems = strings.split(target_lines[i], " ")
@@ -141,7 +129,7 @@ read_target_file :: proc(target_name: string) -> (TargetFile, TargetFileError) {
 	i += 1
 	loop: for i < len(target_lines) {
 		switch target_lines[i] {
-		case "src_files":
+		case "source":
 			{
 				i += 1
 				for i < len(target_lines) &&
@@ -153,7 +141,7 @@ read_target_file :: proc(target_name: string) -> (TargetFile, TargetFileError) {
 					i += 1
 				}
 			}
-		case "inc_paths":
+		case "includes":
 			{
 				i += 1
 				for i < len(target_lines) &&
@@ -165,7 +153,7 @@ read_target_file :: proc(target_name: string) -> (TargetFile, TargetFileError) {
 					i += 1
 				}
 			}
-		case "lib_paths":
+		case "libraries":
 			{
 				i += 1
 				for i < len(target_lines) &&

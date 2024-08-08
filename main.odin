@@ -21,7 +21,8 @@ main :: proc() {
 			case "build":
 				exec_build_cmd()
 			case "depend":
-			case "-help":
+				exec_depend_cmd()
+			case "--help":
 				print_desc_exit(CMD_DESC)
 			case:
 				print_desc_panic(CMD_DESC)
