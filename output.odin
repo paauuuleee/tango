@@ -11,6 +11,7 @@ Usage:
 
 Commands:
 
+    init    Initialises the directory to tango
     new     Creates a new c target
     build   Builds the target
     add     Adds source files to the target comilation
@@ -106,6 +107,12 @@ Usage:
 Description:
 
     target-name  The target name must be the name of an existing target.`
+
+INIT_CMD_DESC :: `The init command initialises the directory to tango.
+
+Usage:
+
+    tango init`
 
 print_desc_panic :: proc(desc: string) {
     fmt.println(desc)

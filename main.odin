@@ -23,6 +23,8 @@ main :: proc() {
             exec_depend_cmd()
         case "log":
             exec_log_cmd()
+        case "init":
+            exec_init_cmd()
         case "--help":
             print_desc_exit(CMD_DESC)
         case:

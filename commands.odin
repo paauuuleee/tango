@@ -6,7 +6,19 @@ import path "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
+exec_init_cmd :: proc() {
+    if len(os.args) != 2 {
+        if len(os.args) == 3 && os.args[3] == "--help" {print_desc_exit(INIT_CMD_DESC)}
+        print_desc_panic(INIT_CMD_DESC)
+    }
+
+    err := init_tango()
+    msg_panic_if(err, .AlreadyInitError, "Directory is already initialised to tango.")
+}
+
 exec_new_cmd :: proc() {
+    _ = init_tango()
+
     if len(os.args) != 5 {
         if len(os.args) == 3 && os.args[2] == "--help" {print_desc_exit(NEW_CMD_DESC)}
         print_desc_panic(NEW_CMD_DESC)
@@ -329,8 +341,9 @@ exec_log_cmd :: proc() {
                 libraries = fmt.tprintf("%sLibrary: System:lib%s", libraries, lib.name)
                 continue
             }
-            path, err := path.rel(target_file.directory, lib.abs_path)
+            rel_path, err := path.rel(target_file.directory, lib.abs_path)
             if err != .None {msg_panic("Cannot determine relative path.")}
+            path := fmt.tprintf("@executable_path/%s", rel_path)
             if lib.link_opts == "absolute" {path = lib.abs_path}
             libraries = fmt.tprintf("%sLibrary: %s/lib%s.dylib", libraries, path, lib.name)
         }

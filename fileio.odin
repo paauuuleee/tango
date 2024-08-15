@@ -23,9 +23,11 @@ TargetFile :: struct {
 }
 
 create_target_file :: proc(name, directory, type: string) -> (TargetFile, Error) {
-    if os.exists(fmt.tprintf("./%s.tango", name)) {return TargetFile{}, .ExistError}
+    cwd := os.get_current_directory()
+    tango_dir := fmt.tprintf("%s/.tango", cwd)
+    if os.exists(fmt.tprintf("%s/%s.tango", tango_dir, name)) {return TargetFile{}, .ExistError}
 
-    fd, errno := os.open(fmt.tprintf("./%s.tango", name), os.O_CREATE | os.O_RDWR, 0o0644)
+    fd, errno := os.open(fmt.tprintf("%s/%s.tango", tango_dir, name), os.O_CREATE | os.O_RDWR, 0o0644)
     if errno != 0 {return TargetFile{}, .CreateError}
 
     return TargetFile{fd = fd, name = name, directory = directory, type = type}, .None
@@ -90,13 +92,16 @@ write_target_file :: proc(target_file: TargetFile) -> Error {
 }
 
 read_target_file :: proc(target_name: string) -> (TargetFile, Error) {
-    if !os.exists(fmt.tprintf("./%s.tango", target_name)) {
+    cwd := os.get_current_directory()
+    tango_dir := fmt.tprintf("%s/.tango", cwd)
+
+    if !os.exists(fmt.tprintf("%s/%s.tango", tango_dir, target_name)) {
         return TargetFile{}, .NonExistError
     }
 
     fd: os.Handle
     errno: os.Errno
-    if fd, errno = os.open(fmt.tprintf("./%s.tango", target_name), os.O_RDWR); errno != 0 {
+    if fd, errno = os.open(fmt.tprintf("%s/%s.tango", tango_dir, target_name), os.O_RDWR); errno != 0 {
         return TargetFile{}, .OpenError
     }
 

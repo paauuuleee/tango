@@ -44,6 +44,15 @@ Error :: enum {
     NotFileError,
     AbsPathError,
     WrongTypeError,
+    AlreadyInitError,
+}
+
+init_tango :: proc() -> Error {
+    cwd := os.get_current_directory()
+    tango_dir := fmt.tprintf("%s/.tango", cwd)
+    if os.is_dir(tango_dir) {return .AlreadyInitError}
+    os.make_directory(tango_dir, 0o0755)
+    return .None
 }
 
 construct_depend_list :: proc(target_file: TargetFile) -> [dynamic]TargetFile {
