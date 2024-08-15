@@ -97,7 +97,17 @@ exec_build_cmd :: proc() {
     msg_panic_if(err, .ReadError, "Cannot read tango file contents.")
     msg_panic_if(err, .ParseError, "Cannot parse tango file contents.")
 
-    compile(target_file)
+    depend_list := construct_depend_list(target_file)
+    for depend in depend_list {
+        fmt.println(depend.name)
+    }
+    defer delete(depend_list)
+
+    for depend_target_file in depend_list {compile(depend_target_file)}
+    for depend_target_file in depend_list {
+        err = close_target_file(depend_target_file)
+        msg_panic_if(err, .CloseError, "Cannot close tango file.")
+    }
 }
 
 
@@ -173,7 +183,7 @@ exec_link_cmd :: proc() {
             append(&target_file.depends, os.args[3][7:])
         }
 
-        if lib_target_file.type == "static" {
+        if lib_target_file.type == "static" && os.args[4] == "--static" {
             lib_path = fmt.tprintf("%s/lib%s.a", lib_target_file.directory, lib_target_file.name)
         }
          else if lib_target_file.type == "shared" && (os.args[4] == "--absolute" || os.args[4] == "--relative") {
@@ -200,10 +210,15 @@ exec_link_cmd :: proc() {
         }
     }
 
+    if strings.contains(os.args[3], "system:") {
+        if os.args[4] != "--absolute" {msg_panic("System libraries have to be linked with the absolute path.")}
+        lib_path = fmt.tprintf("system/lib%s.dylib", os.args[4][7:])
+    }
+
     switch os.args[4] 
     {
     case "--static":
-        append(&target_file.source, lib_path)
+        append(&target_file.archives, lib_path)
     case "--absolute":
         append(&target_file.libraries, Library{path.stem(path.base(lib_path))[3:], path.dir(lib_path), "absolute"})
     case "--relative":

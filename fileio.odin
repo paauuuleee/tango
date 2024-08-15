@@ -18,6 +18,7 @@ TargetFile :: struct {
     source:    [dynamic]string,
     includes:  [dynamic]string,
     libraries: [dynamic]Library,
+    archives:  [dynamic]string,
     depends:   [dynamic]string,
 }
 
@@ -56,6 +57,14 @@ write_target_file :: proc(target_file: TargetFile) -> Error {
             "%sincludes\n\t%s\n",
             target_file_content,
             strings.join(target_file.includes[:], "\n\t"),
+        )
+    }
+
+    if len(target_file.archives) > 0 {
+        target_file_content = fmt.tprintf(
+            "%sarchives\n\t%s\n",
+            target_file_content,
+            strings.join(target_file.archives[:], "\n\t"),
         )
     }
 
@@ -130,7 +139,6 @@ read_target_file :: proc(target_name: string) -> (TargetFile, Error) {
             i += 1
             for i < len(target_lines) && len(target_lines[i]) != 0 && target_lines[i][0] == '\t' {
                 file := target_lines[i][1:]
-                if !os.is_file(file) {return TargetFile{}, .ParseError}
                 append(&target_file.source, file)
                 i += 1
             }
@@ -144,12 +152,20 @@ read_target_file :: proc(target_name: string) -> (TargetFile, Error) {
                 i += 1
             }
 
+        case "archives":
+            i += 1
+            for i < len(target_lines) && len(target_lines[i]) != 0 && target_lines[i][0] == '\t' {
+                file := target_lines[i][1:]
+                append(&target_file.archives, file)
+                i += 1
+            }
+
         case "libraries":
             i += 1
             for i < len(target_lines) && len(target_lines[i]) != 0 && target_lines[i][0] == '\t' {
                 library := target_lines[i][1:]
                 parts := strings.split(library, " ")
-                if !os.is_dir(parts[1]) {
+                if !os.is_dir(parts[1]) && parts[1] != "system" {
                     return TargetFile{}, .ParseError
                 }
                 if parts[2] != "relative" && parts[2] != "absolute" {
