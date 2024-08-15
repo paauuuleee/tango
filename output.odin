@@ -17,6 +17,7 @@ Commands:
     inc     Sets an include path
     link    Links static and dynamic libraries (can also link to other target)
     depend  Makes building a target dependend on another target built
+    log     Gives a status update on configuration of target
 
 Type "--help" after unclear command and recieve an in depth explanation`
 
@@ -96,26 +97,36 @@ Description:
     depend-target-name  The depend target name must be the name of an existing target.
                         The link command also adds target that the giving target depends on when linking to a target.`
 
+LOG_CMD_DESC :: `The log command gives a status update on the configuration of the target.
+
+Usage:
+    
+    tango log [target-name]
+
+Description:
+
+    target-name  The target name must be the name of an existing target.`
+
 print_desc_panic :: proc(desc: string) {
-	fmt.println(desc)
-	os.exit(1)
+    fmt.println(desc)
+    os.exit(1)
 }
 
 print_desc_exit :: proc(desc: string) {
-	fmt.println(desc)
-	os.exit(0)
+    fmt.println(desc)
+    os.exit(0)
 }
 
 msg_panic :: proc(fmt_string: string, args: ..any) {
-	msg := fmt.tprintf(fmt_string, ..args)
-	fmt.printfln("Error: %s", msg)
-	os.exit(1)
+    msg := fmt.tprintf(fmt_string, ..args)
+    fmt.printfln("Error: %s", msg)
+    os.exit(1)
 }
 
 msg_panic_if :: proc(given_err, check_err: Error, fmt_string: string, args: ..any) {
-	if given_err == check_err {
-		msg := fmt.tprintf(fmt_string, ..args)
-		fmt.printfln("Error: %s", msg)
-		os.exit(1)
-	}
+    if given_err == check_err {
+        msg := fmt.tprintf(fmt_string, ..args)
+        fmt.printfln("Error: %s", msg)
+        os.exit(1)
+    }
 }
