@@ -50,9 +50,9 @@ Error :: enum {
 init_tango :: proc() -> Error {
     cwd := os.get_current_directory()
     tango_dir := fmt.tprintf("%s/.tango", cwd)
-    if os.is_dir(tango_dir) {return .AlreadyInitError}
+    if os.is_dir(tango_dir) {return Error.AlreadyInitError}
     os.make_directory(tango_dir, 0o0755)
-    return .None
+    return Error.None
 }
 
 construct_depend_list :: proc(target_file: TargetFile) -> [dynamic]TargetFile {
@@ -70,10 +70,10 @@ construct_depend_list :: proc(target_file: TargetFile) -> [dynamic]TargetFile {
 open_depends :: proc(depends: [dynamic]string, depend_list: ^[dynamic]TargetFile) {
     for depend in depends {
         depend_target_file, err := read_target_file(depend)
-        msg_panic_if(err, .NonExistError, "Target %s does not exists.", depend)
-        msg_panic_if(err, .OpenError, "Cannot open %s tango file.", depend)
-        msg_panic_if(err, .ReadError, "Cannot read %s tango file contents.", depend)
-        msg_panic_if(err, .ParseError, "Cannot parse %s tango file contents.", depend)
+        msg_panic_if(err, Error.NonExistError, "Target %s does not exists.", depend)
+        msg_panic_if(err, Error.OpenError, "Cannot open %s tango file.", depend)
+        msg_panic_if(err, Error.ReadError, "Cannot read %s tango file contents.", depend)
+        msg_panic_if(err, Error.ParseError, "Cannot parse %s tango file contents.", depend)
 
         already_present := false
         for target_file in depend_list {
@@ -84,7 +84,7 @@ open_depends :: proc(depends: [dynamic]string, depend_list: ^[dynamic]TargetFile
         }
          else {
             err = close_target_file(depend_target_file)
-            msg_panic_if(err, .CloseError, "Cannot close %s tango file.", depend)
+            msg_panic_if(err, Error.CloseError, "Cannot close %s tango file.", depend)
         }
 
         open_depends(depend_target_file.depends, depend_list)
@@ -156,10 +156,20 @@ compile :: proc(target_file: TargetFile) {
         return
     }
 
+    source := make([dynamic]string, 0, len(target_file.source))
+    defer delete(source)
+    append(&source, ..target_file.source[:])
+
+    for dir in target_file.src_dir {
+        source_files, err := path.glob(fmt.tprintf("%s/*.c", dir))
+        if err != path.Match_Error.None {msg_panic("Cannot read source directory %s.", dir)}
+        append(&source, ..source_files)
+    }
+
     cmd := "gcc"
 
-    if len(target_file.source) < 1 {msg_panic("Target has to have at least one source file to be compiled")}
-    cmd = fmt.tprintf("%s %s", cmd, strings.join(target_file.source[:], " "))
+    if len(source) < 1 {msg_panic("Target has to have at least one source file to be compiled")}
+    cmd = fmt.tprintf("%s %s", cmd, strings.join(source[:], " "))
 
     if len(target_file.archives) > 0 {
         cmd = fmt.tprintf("%s %s", cmd, strings.join(target_file.archives[:], " "))
@@ -198,7 +208,8 @@ compile :: proc(target_file: TargetFile) {
             install_cmd = fmt.tprintf("%s %s %s/lib%s.dylib", install_cmd, install_name, lib.abs_path, lib.name)
         case "relative":
             rel_path, rel_err := path.rel(target_file.directory, lib.abs_path)
-            if rel_err != .None {msg_panic("Cannot determine relative path between executable and library.")}
+            if rel_err !=
+               path.Relative_Error.None {msg_panic("Cannot determine relative path between executable and library.")}
             install_cmd = fmt.tprintf(
                 "%s %s @executable_path/%s/lib%s.dylib",
                 install_cmd,
@@ -221,13 +232,23 @@ compile :: proc(target_file: TargetFile) {
 compile_static :: proc(target_file: TargetFile) {
     gcc_cmd := "gcc"
 
-    if len(target_file.source) < 1 {msg_panic("Target has to have at least one source file to be compiled.")}
+    source := make([dynamic]string, 0, len(target_file.source))
+    defer delete(source)
+    append(&source, ..target_file.source[:])
 
-    object_files := make([]string, len(target_file.source))
-    for src, i in target_file.source {
+    for dir in target_file.src_dir {
+        source_files, err := path.glob(fmt.tprintf("%s/*.c", dir))
+        if err != path.Match_Error.None {msg_panic("Cannot read source directory %s.", dir)}
+        append(&source, ..source_files)
+    }
+
+    if len(source) < 1 {msg_panic("Target has to have at least one source file to be compiled.")}
+
+    object_files := make([]string, len(source))
+    for src, i in source {
         object_files[i] = fmt.tprintf("%s.o", path.stem(target_file.source[i]))
     }
-    gcc_cmd = fmt.tprintf("%s %s -c -Wall -Werror", gcc_cmd, strings.join(target_file.source[:], " "))
+    gcc_cmd = fmt.tprintf("%s %s -c -Wall -Werror", gcc_cmd, strings.join(source[:], " "))
 
     if len(target_file.includes) > 0 {
         gcc_cmd = fmt.tprintf("%s -I%s", gcc_cmd, strings.join(target_file.includes[:], " -I"))
@@ -265,7 +286,8 @@ compile_static :: proc(target_file: TargetFile) {
             install_cmd = fmt.tprintf("%s %s %s/lib%s.dylib", install_cmd, install_name, lib.abs_path, lib.name)
         case "relative":
             rel_path, rel_err := path.rel(target_file.directory, lib.abs_path)
-            if rel_err != .None {msg_panic("Cannot determine relative path between executable and library.")}
+            if rel_err !=
+               path.Relative_Error.None {msg_panic("Cannot determine relative path between executable and library.")}
             install_cmd = fmt.tprintf(
                 "%s %s @executable_path/%s/lib%s.dylib",
                 install_cmd,
@@ -326,16 +348,16 @@ possible_target_name :: proc(name: string) -> bool {
 }
 
 get_dir_path :: proc(partial_path: string) -> (string, Error) {
-    if !os.is_dir(partial_path) {return "", .NotDirError}
+    if !os.is_dir(partial_path) {return "", Error.NotDirError}
     abs_path, ok := path.abs(partial_path)
-    if !ok {return "", .AbsPathError}
-    return abs_path, .None
+    if !ok {return "", Error.AbsPathError}
+    return abs_path, Error.None
 }
 
 get_file_path_if :: proc(partial_path: string, file_type: []string) -> (string, Error) {
-    if !os.is_file(partial_path) {return "", .NotFileError}
+    if !os.is_file(partial_path) {return "", Error.NotFileError}
     abs_path, ok := path.abs(partial_path)
-    if !ok {return "", .AbsPathError}
-    if !slice.contains(file_type, path.ext(abs_path)) {return "", .WrongTypeError}
-    return abs_path, .None
+    if !ok {return "", Error.AbsPathError}
+    if !slice.contains(file_type, path.ext(abs_path)) {return "", Error.WrongTypeError}
+    return abs_path, Error.None
 }

@@ -13,7 +13,7 @@ exec_init_cmd :: proc() {
     }
 
     err := init_tango()
-    msg_panic_if(err, .AlreadyInitError, "Directory is already initialised to tango.")
+    msg_panic_if(err, Error.AlreadyInitError, "Directory is already initialised to tango.")
 }
 
 exec_new_cmd :: proc() {
@@ -33,8 +33,8 @@ exec_new_cmd :: proc() {
     target_name := os.args[2]
 
     target_directory, err := get_dir_path(os.args[3])
-    msg_panic_if(err, .NotDirError, "Target directory must be a path to a folder.")
-    msg_panic_if(err, .AbsPathError, "Cannot determine absolute path to directory.")
+    msg_panic_if(err, Error.NotDirError, "Target directory must be a path to a folder.")
+    msg_panic_if(err, Error.AbsPathError, "Cannot determine absolute path to directory.")
 
     if os.args[4] != "--exec" && os.args[4] != "--static" && os.args[4] != "--shared" {
         msg_panic("Allowed options are --exec, --static, --shared.")
@@ -43,14 +43,14 @@ exec_new_cmd :: proc() {
 
     target_file: TargetFile
     target_file, err = create_target_file(target_name, target_directory, target_type)
-    msg_panic_if(err, .ExistError, "Target with the same name already exists.")
-    msg_panic_if(err, .CreateError, "Cannot create target file.")
+    msg_panic_if(err, Error.ExistError, "Target with the same name already exists.")
+    msg_panic_if(err, Error.CreateError, "Cannot create target file.")
 
     err = write_target_file(target_file)
-    msg_panic_if(err, .WriteError, "Cannot write to tango file.")
+    msg_panic_if(err, Error.WriteError, "Cannot write to tango file.")
 
     err = close_target_file(target_file)
-    msg_panic_if(err, .CloseError, "Cannot close tango file.")
+    msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
 }
 
 exec_add_cmd :: proc() {
@@ -67,25 +67,60 @@ exec_add_cmd :: proc() {
     }
 
     target_file, err := read_target_file(os.args[2])
-    msg_panic_if(err, .NonExistError, "Given target does not exists.")
-    msg_panic_if(err, .OpenError, "Cannot open tango file.")
-    msg_panic_if(err, .ReadError, "Cannot read tango file contents.")
-    msg_panic_if(err, .ParseError, "Cannot parse tango file contents.")
+    msg_panic_if(err, Error.NonExistError, "Given target does not exists.")
+    msg_panic_if(err, Error.OpenError, "Cannot open tango file.")
+    msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
+    msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
     src_file: string
     src_file, err = get_file_path_if(os.args[3], {".c"})
-    msg_panic_if(err, .NotFileError, "The second argument must be a path to a c source file.")
-    msg_panic_if(err, .AbsPathError, "Cannot determine absolute path for provided c source file.")
-    msg_panic_if(err, .WrongTypeError, "Added file must be a path to a c source file.")
+    msg_panic_if(err, Error.NotFileError, "The second argument must be a path to a c source file.")
+    msg_panic_if(err, Error.AbsPathError, "Cannot determine absolute path for provided c source file.")
+    msg_panic_if(err, Error.WrongTypeError, "Added file must be a path to a c source file.")
 
     if slice.contains(target_file.source[:], src_file) {msg_panic("Source file was already added to target.")}
     append(&target_file.source, src_file)
 
     err = write_target_file(target_file)
-    msg_panic_if(err, .WriteError, "Cannot write to tango file.")
+    msg_panic_if(err, Error.WriteError, "Cannot write to tango file.")
 
     err = close_target_file(target_file)
-    msg_panic_if(err, .CloseError, "Cannot close tango file.")
+    msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
+}
+
+exec_add_dir_cmd :: proc() {
+    if len(os.args) != 4 {
+        if len(os.args) == 3 && os.args[2] == "--help" {print_desc_exit(ADD_DIR_CMD_DESC)}
+        print_desc_panic(ADD_DIR_CMD_DESC)
+    }
+
+    if !possible_target_name(os.args[2]) {
+        msg_panic(
+            "The target name must consist of only engish letters and arabic digits. " +
+            "The leading character must be a letter.",
+        )
+    }
+
+    target_file, err := read_target_file(os.args[2])
+    msg_panic_if(err, Error.NonExistError, "Given target does not exists.")
+    msg_panic_if(err, Error.OpenError, "Cannot open tango file.")
+    msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
+    msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
+
+    dir_path: string
+    dir_path, err = get_dir_path(os.args[3])
+    msg_panic_if(err, Error.NotDirError, "Given directoy does not exist.")
+    msg_panic_if(err, Error.AbsPathError, "Cannot determine absolute path of directory.")
+
+    if !slice.contains(target_file.src_dir[:], dir_path) {
+        append(&target_file.src_dir, dir_path)
+    }
+
+    err = write_target_file(target_file)
+    msg_panic_if(err, Error.WriteError, "Cannot write to tango file.")
+
+    err = close_target_file(target_file)
+    msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
 }
 
 exec_build_cmd :: proc() {
@@ -104,10 +139,10 @@ exec_build_cmd :: proc() {
     }
 
     target_file, err := read_target_file(os.args[2])
-    msg_panic_if(err, .NonExistError, "Given target does not exists.")
-    msg_panic_if(err, .OpenError, "Cannot open tango file.")
-    msg_panic_if(err, .ReadError, "Cannot read tango file contents.")
-    msg_panic_if(err, .ParseError, "Cannot parse tango file contents.")
+    msg_panic_if(err, Error.NonExistError, "Given target does not exists.")
+    msg_panic_if(err, Error.OpenError, "Cannot open tango file.")
+    msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
+    msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
     depend_list := construct_depend_list(target_file)
     defer delete(depend_list)
@@ -115,7 +150,7 @@ exec_build_cmd :: proc() {
     for depend_target_file in depend_list {compile(depend_target_file)}
     for depend_target_file in depend_list {
         err = close_target_file(depend_target_file)
-        msg_panic_if(err, .CloseError, "Cannot close tango file.")
+        msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
     }
 }
 
@@ -134,24 +169,24 @@ exec_inc_cmd :: proc() {
     }
 
     include, err := get_dir_path(os.args[3])
-    msg_panic_if(err, .NotDirError, "Target directory must be a path to a folder.")
-    msg_panic_if(err, .AbsPathError, "Cannot determine absolute path to directory.")
+    msg_panic_if(err, Error.NotDirError, "Target directory must be a path to a folder.")
+    msg_panic_if(err, Error.AbsPathError, "Cannot determine absolute path to directory.")
 
     target_file: TargetFile
     target_file, err = read_target_file(os.args[2])
-    msg_panic_if(err, .NonExistError, "Given target does not exists.")
-    msg_panic_if(err, .OpenError, "Cannot open tango file.")
-    msg_panic_if(err, .ReadError, "Cannot read tango file contents.")
-    msg_panic_if(err, .ParseError, "Cannot parse tango file contents.")
+    msg_panic_if(err, Error.NonExistError, "Given target does not exists.")
+    msg_panic_if(err, Error.OpenError, "Cannot open tango file.")
+    msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
+    msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
     if slice.contains(target_file.includes[:], include) {msg_panic("Include path was already added to target.")}
     append(&target_file.includes, include)
 
     err = write_target_file(target_file)
-    msg_panic_if(err, .WriteError, "Cannot write to tango file.")
+    msg_panic_if(err, Error.WriteError, "Cannot write to tango file.")
 
     err = close_target_file(target_file)
-    msg_panic_if(err, .CloseError, "Cannot close tango file.")
+    msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
 }
 
 exec_link_cmd :: proc() {
@@ -168,10 +203,10 @@ exec_link_cmd :: proc() {
     }
 
     target_file, err := read_target_file(os.args[2])
-    msg_panic_if(err, .NonExistError, "Given target does not exists.")
-    msg_panic_if(err, .OpenError, "Cannot open tango file.")
-    msg_panic_if(err, .ReadError, "Cannot read tango file contents.")
-    msg_panic_if(err, .ParseError, "Cannot parse tango file contents.")
+    msg_panic_if(err, Error.NonExistError, "Given target does not exists.")
+    msg_panic_if(err, Error.OpenError, "Cannot open tango file.")
+    msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
+    msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
     lib_path := os.args[3]
     if strings.contains(os.args[3], "target:") {
@@ -183,10 +218,10 @@ exec_link_cmd :: proc() {
         }
         lib_target_file: TargetFile
         lib_target_file, err = read_target_file(os.args[3][7:])
-        msg_panic_if(err, .NonExistError, "Second target does not exists.")
-        msg_panic_if(err, .OpenError, "Cannot open tango file.")
-        msg_panic_if(err, .ReadError, "Cannot read tango file contents.")
-        msg_panic_if(err, .ParseError, "Cannot parse tango file contents.")
+        msg_panic_if(err, Error.NonExistError, "Second target does not exists.")
+        msg_panic_if(err, Error.OpenError, "Cannot open tango file.")
+        msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
+        msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
         if !slice.contains(target_file.depends[:], os.args[3][7:]) {
             append(&target_file.depends, os.args[3][7:])
@@ -203,7 +238,7 @@ exec_link_cmd :: proc() {
         }
 
         err = close_target_file(lib_target_file)
-        msg_panic_if(err, .CloseError, "Cannot close tango file.")
+        msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
     }
      else if strings.contains(os.args[3], "system:") {
         if os.args[4] != "--absolute" {msg_panic("System libraries have to be linked with the absolute path.")}
@@ -211,9 +246,9 @@ exec_link_cmd :: proc() {
     }
      else {
         lib_path, err = get_file_path_if(lib_path, {".a", ".dylib", ".so"})
-        msg_panic_if(err, .NotFileError, "Given library does not exist.")
-        msg_panic_if(err, .AbsPathError, "Cannot determine absolute path to library.")
-        msg_panic_if(err, .WrongTypeError, "Given file is not a library file.")
+        msg_panic_if(err, Error.NotFileError, "Given library does not exist.")
+        msg_panic_if(err, Error.AbsPathError, "Cannot determine absolute path to library.")
+        msg_panic_if(err, Error.WrongTypeError, "Given file is not a library file.")
         if (os.args[4] == "--static" && path.ext(lib_path) != ".a") ||
            (os.args[4] == "--relative" && (path.ext(lib_path) != ".dylib" && path.ext(lib_path) != ".so")) {
             msg_panic(
@@ -236,10 +271,10 @@ exec_link_cmd :: proc() {
     }
 
     err = write_target_file(target_file)
-    msg_panic_if(err, .WriteError, "Cannot write to tango file.")
+    msg_panic_if(err, Error.WriteError, "Cannot write to tango file.")
 
     err = close_target_file(target_file)
-    msg_panic_if(err, .CloseError, "Cannot close tango file.")
+    msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
 }
 
 exec_depend_cmd :: proc() {
@@ -260,18 +295,18 @@ exec_depend_cmd :: proc() {
     }
 
     target_file, err := read_target_file(os.args[2])
-    msg_panic_if(err, .NonExistError, "Given target does not exists.")
-    msg_panic_if(err, .OpenError, "Cannot open tango file.")
-    msg_panic_if(err, .ReadError, "Cannot read tango file contents.")
-    msg_panic_if(err, .ParseError, "Cannot parse tango file contents.")
+    msg_panic_if(err, Error.NonExistError, "Given target does not exists.")
+    msg_panic_if(err, Error.OpenError, "Cannot open tango file.")
+    msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
+    msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
     depend_target_file: TargetFile
     depend_target_file, err = read_target_file(os.args[3])
-    msg_panic_if(err, .NonExistError, "Dependency target does not exists.")
-    msg_panic_if(err, .OpenError, "Cannot open dependency tango file.")
+    msg_panic_if(err, Error.NonExistError, "Dependency target does not exists.")
+    msg_panic_if(err, Error.OpenError, "Cannot open dependency tango file.")
 
     err = close_target_file(depend_target_file)
-    msg_panic_if(err, .CloseError, "Cannot close dependency tango file.")
+    msg_panic_if(err, Error.CloseError, "Cannot close dependency tango file.")
 
     if slice.contains(target_file.depends[:], os.args[3]) {
         msg_panic("Given dependecy target is already added to target.")
@@ -279,10 +314,10 @@ exec_depend_cmd :: proc() {
     append(&target_file.depends, os.args[3])
 
     err = write_target_file(target_file)
-    msg_panic_if(err, .WriteError, "Cannot write to tango file.")
+    msg_panic_if(err, Error.WriteError, "Cannot write to tango file.")
 
     err = close_target_file(target_file)
-    msg_panic_if(err, .CloseError, "Cannot close tango file.")
+    msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
 }
 
 exec_log_cmd :: proc() {
@@ -297,13 +332,13 @@ exec_log_cmd :: proc() {
     }
 
     target_file, err := read_target_file(os.args[2])
-    msg_panic_if(err, .NonExistError, "Given target does not exists.")
-    msg_panic_if(err, .OpenError, "Cannot open tango file.")
-    msg_panic_if(err, .ReadError, "Cannot read tango file contents.")
-    msg_panic_if(err, .ParseError, "Cannot parse tango file contents.")
+    msg_panic_if(err, Error.NonExistError, "Given target does not exists.")
+    msg_panic_if(err, Error.OpenError, "Cannot open tango file.")
+    msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
+    msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
     err = close_target_file(target_file)
-    msg_panic_if(err, .CloseError, "Cannot close tango file.")
+    msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
 
     target_type := ""
     switch target_file.type {
@@ -318,6 +353,10 @@ exec_log_cmd :: proc() {
     source := ""
     if len(target_file.source) == 0 {source = "[]"}
      else {source = fmt.tprintf("%s", strings.join(target_file.source[:], ",\n                         "))}
+
+    src_dir := ""
+    if len(target_file.src_dir) == 0 {src_dir = "[]"}
+     else {src_dir = fmt.tprintf("%s", strings.join(target_file.src_dir[:], ",\n                         "))}
 
     includes := ""
     if len(target_file.includes) == 0 {includes = "[]"}
@@ -342,7 +381,7 @@ exec_log_cmd :: proc() {
                 continue
             }
             rel_path, err := path.rel(target_file.directory, lib.abs_path)
-            if err != .None {msg_panic("Cannot determine relative path.")}
+            if err != path.Relative_Error.None {msg_panic("Cannot determine relative path.")}
             path := fmt.tprintf("@executable_path/%s", rel_path)
             if lib.link_opts == "absolute" {path = lib.abs_path}
             libraries = fmt.tprintf("%sLibrary: %s/lib%s.dylib", libraries, path, lib.name)
@@ -354,6 +393,7 @@ exec_log_cmd :: proc() {
         "Compile destination:     %s\n" +
         "Target type:             %s\n" +
         "C source files:          %s\n" +
+        "C source directory:      %s\n" +
         "Include paths:           %s\n" +
         "Linked static libraries: %s\n" +
         "Linked shared libraries: %s\n" +
@@ -362,6 +402,7 @@ exec_log_cmd :: proc() {
         target_file.directory,
         target_type,
         source,
+        src_dir,
         includes,
         archives,
         libraries,
@@ -381,19 +422,19 @@ exec_ls_cmd :: proc() {
     }
 
     target_files_paths, match_err := path.glob(fmt.tprintf("%s/.tango/*.tango", cwd))
-    if match_err != .None {msg_panic("Cannot read .tango directory.")}
+    if match_err != path.Match_Error.None {msg_panic("Cannot read .tango directory.")}
 
     target_files := make([]TargetFile, len(target_files_paths))
     for target_file_path, i in target_files_paths {
         target_name := path.stem(path.base(target_file_path))
         file, err := read_target_file(target_name)
-        msg_panic_if(err, .NonExistError, "%s target does not exists.", target_name)
-        msg_panic_if(err, .OpenError, "Cannot open %s tango file.", target_name)
-        msg_panic_if(err, .ReadError, "Cannot read %s tango file contents.", target_name)
-        msg_panic_if(err, .ParseError, "Cannot parse %s tango file contents.", target_name)
+        msg_panic_if(err, Error.NonExistError, "%s target does not exists.", target_name)
+        msg_panic_if(err, Error.OpenError, "Cannot open %s tango file.", target_name)
+        msg_panic_if(err, Error.ReadError, "Cannot read %s tango file contents.", target_name)
+        msg_panic_if(err, Error.ParseError, "Cannot parse %s tango file contents.", target_name)
 
         err = close_target_file(file)
-        msg_panic_if(err, .CloseError, "Cannot close %s tango file.", target_name)
+        msg_panic_if(err, Error.CloseError, "Cannot close %s tango file.", target_name)
         target_files[i] = file
     }
 

@@ -15,6 +15,8 @@ main :: proc() {
             exec_new_cmd()
         case "add":
             exec_add_cmd()
+        case "add-dir":
+            exec_add_dir_cmd()
         case "link":
             exec_link_cmd()
         case "inc":

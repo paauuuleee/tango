@@ -11,15 +11,16 @@ Usage:
 
 Commands:
 
-    init    Initialises the directory to tango
-    new     Creates a new c target
-    build   Builds the target
-    add     Adds source files to the target comilation
-    inc     Sets an include path
-    link    Links static and dynamic libraries (can also link to other target)
-    depend  Makes building a target dependend on another target built
-    log     Gives a status update on configuration of target
-    ls      Lists all the targets in the directory
+    init     Initialises the directory to tango
+    new      Creates a new c target
+    build    Builds the target
+    add      Adds source files to the target comilation
+    add-dir  Adds a directory of source files to the target
+    inc      Sets an include path
+    link     Links static and dynamic libraries (can also link to other target)
+    depend   Makes building a target dependend on another target built
+    log      Gives a status update on configuration of target
+    ls       Lists all the targets in the directory
 
 Type "--help" after unclear command and recieve an in depth explanation`
 
@@ -52,6 +53,18 @@ Description:
 
     target-name    The target name must be the name of an existing target.
     c-source-file  The c source file must provided by absolute or relative path. (path to folder is permitted)`
+
+ADD_DIR_CMD_DESC :: `The add-dir command adds a directory to the target compilation in which to look for c source files.
+
+Usage: 
+    
+    tango add-dir [target-name] [source-directory]
+
+Description:
+
+    target-name       The target name must be the name of an existing target.
+    source-directory  The source directory path must lead to an existing directory.
+                      All c files contained in that directory will be included in the compilation.`
 
 INC_CMD_DESC :: `The inc command adds an include path to the target compilation.
 
