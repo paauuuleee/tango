@@ -8,7 +8,7 @@ import "core:strings"
 
 exec_init_cmd :: proc() {
     if len(os.args) != 2 {
-        if len(os.args) == 3 && os.args[3] == "--help" {print_desc_exit(INIT_CMD_DESC)}
+        if len(os.args) == 3 && os.args[2] == "--help" {print_desc_exit(INIT_CMD_DESC)}
         print_desc_panic(INIT_CMD_DESC)
     }
 
@@ -317,26 +317,26 @@ exec_log_cmd :: proc() {
 
     source := ""
     if len(target_file.source) == 0 {source = "[]"}
-     else {source = fmt.tprintf("%s", strings.join(target_file.source[:], ",\n\t                         "))}
+     else {source = fmt.tprintf("%s", strings.join(target_file.source[:], ",\n                         "))}
 
     includes := ""
     if len(target_file.includes) == 0 {includes = "[]"}
-     else {includes = fmt.tprintf("%s", strings.join(target_file.includes[:], ",\n\t                         "))}
+     else {includes = fmt.tprintf("%s", strings.join(target_file.includes[:], ",\n                         "))}
 
     archives := ""
     if len(target_file.archives) == 0 {archives = "[]"}
-     else {archives = fmt.tprintf("%s", strings.join(target_file.archives[:], ",\n\t                         "))}
+     else {archives = fmt.tprintf("%s", strings.join(target_file.archives[:], ",\n                         "))}
 
     depends := ""
     if len(target_file.depends) == 0 {depends = "[]"}
-     else {depends = fmt.tprintf("%s", strings.join(target_file.depends[:], ",\n\t                         "))}
+     else {depends = fmt.tprintf("%s", strings.join(target_file.depends[:], ",\n                         "))}
 
 
     libraries := "[]"
     if len(target_file.libraries) > 0 {
         libraries = ""
         for lib in target_file.libraries {
-            if libraries != "" {libraries = fmt.tprintf("%s,\n\t                         ", libraries)}
+            if libraries != "" {libraries = fmt.tprintf("%s,\n                         ", libraries)}
             if lib.abs_path == "system" {
                 libraries = fmt.tprintf("%sLibrary: System:lib%s", libraries, lib.name)
                 continue
@@ -350,14 +350,13 @@ exec_log_cmd :: proc() {
     }
 
     fmt.printf(
-        "\n\t" +
-        "Logged target:           %s\n\t" +
-        "Compile destination:     %s\n\t" +
-        "Target type:             %s\n\t" +
-        "C source files:          %s\n\t" +
-        "Include paths:           %s\n\t" +
-        "Linked static libraries: %s\n\t" +
-        "Linked shared libraries: %s\n\t" +
+        "Logged target:           %s\n" +
+        "Compile destination:     %s\n" +
+        "Target type:             %s\n" +
+        "C source files:          %s\n" +
+        "Include paths:           %s\n" +
+        "Linked static libraries: %s\n" +
+        "Linked shared libraries: %s\n" +
         "Target dependecies:      %s\n",
         target_file.name,
         target_file.directory,
@@ -368,4 +367,44 @@ exec_log_cmd :: proc() {
         libraries,
         depends,
     )
+}
+
+exec_ls_cmd :: proc() {
+    if len(os.args) != 2 {
+        if len(os.args) == 3 && os.args[2] == "--help" {print_desc_exit(LS_CMD_DESC)}
+        print_desc_panic(LS_CMD_DESC)
+    }
+
+    cwd := os.get_current_directory()
+    if !os.is_dir(fmt.tprintf("%s/.tango", cwd)) {
+        msg_panic("Current directory is not initialised to tango.")
+    }
+
+    target_files_paths, match_err := path.glob(fmt.tprintf("%s/.tango/*.tango", cwd))
+    if match_err != .None {msg_panic("Cannot read .tango directory.")}
+
+    target_files := make([]TargetFile, len(target_files_paths))
+    for target_file_path, i in target_files_paths {
+        target_name := path.stem(path.base(target_file_path))
+        file, err := read_target_file(target_name)
+        msg_panic_if(err, .NonExistError, "%s target does not exists.", target_name)
+        msg_panic_if(err, .OpenError, "Cannot open %s tango file.", target_name)
+        msg_panic_if(err, .ReadError, "Cannot read %s tango file contents.", target_name)
+        msg_panic_if(err, .ParseError, "Cannot parse %s tango file contents.", target_name)
+
+        err = close_target_file(file)
+        msg_panic_if(err, .CloseError, "Cannot close %s tango file.", target_name)
+        target_files[i] = file
+    }
+
+    output := ""
+    for target_file in target_files {
+        output = fmt.tprintf("%s%s", output, target_file.name)
+        if len(target_file.depends) > 0 {
+            output = fmt.tprintf("%s -> %s", output, strings.join(target_file.depends[:], ", "))
+        }
+        output = fmt.tprintf("%s\n", output)
+    }
+
+    fmt.printf("%s", output)
 }

@@ -19,8 +19,15 @@ Commands:
     link    Links static and dynamic libraries (can also link to other target)
     depend  Makes building a target dependend on another target built
     log     Gives a status update on configuration of target
+    ls      Lists all the targets in the directory
 
 Type "--help" after unclear command and recieve an in depth explanation`
+
+INIT_CMD_DESC :: `The init command initialises the directory to tango.
+
+Usage:
+
+    tango init`
 
 NEW_CMD_DESC :: `The new command creates a new c target.
 
@@ -108,11 +115,11 @@ Description:
 
     target-name  The target name must be the name of an existing target.`
 
-INIT_CMD_DESC :: `The init command initialises the directory to tango.
+LS_CMD_DESC :: `The ls command lists all targets in the directory.
 
 Usage:
 
-    tango init`
+    tango ls`
 
 print_desc_panic :: proc(desc: string) {
     fmt.println(desc)

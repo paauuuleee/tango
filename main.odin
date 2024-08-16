@@ -9,6 +9,8 @@ main :: proc() {
         print_desc_panic(CMD_DESC)
     case:
         switch os.args[1] {
+        case "init":
+            exec_init_cmd()
         case "new":
             exec_new_cmd()
         case "add":
@@ -23,8 +25,8 @@ main :: proc() {
             exec_depend_cmd()
         case "log":
             exec_log_cmd()
-        case "init":
-            exec_init_cmd()
+        case "ls":
+            exec_ls_cmd()
         case "--help":
             print_desc_exit(CMD_DESC)
         case:
