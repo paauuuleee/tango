@@ -75,8 +75,8 @@ The follwoing network would look like this.
 ```mermaid
 graph LR;
     a-->b;
-    a-->c;
     b-->c;
+    a-->c;
     b-->d;
     c-->d;
 ```
