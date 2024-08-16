@@ -306,8 +306,9 @@ get_install_name :: proc(lib: Library) -> string {
     otool_cmd := fmt.tprintf("otool -D %s/lib%s.dylib | tr '\n' ' '", lib.abs_path, lib.name)
     fp := popen(strings.clone_to_cstring(otool_cmd), "r")
 
-    data: [4069]byte
-    if libc.fgets(raw_data(data[:]), len(data), fp) == nil {
+    size := i32(1024)
+    data := make([]u8, size)
+    if libc.fgets(raw_data(data), size, fp) == nil {
         msg_panic("Cannot determine library id name.")
     }
 
