@@ -29,6 +29,8 @@ main :: proc() {
             exec_log_cmd()
         case "ls":
             exec_ls_cmd()
+        case "rm":
+            exec_rm_cmd()
         case "--help":
             print_desc_exit(CMD_DESC)
         case:

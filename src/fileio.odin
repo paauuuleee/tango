@@ -3,6 +3,7 @@ package main
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import "core:sys/darwin"
 
 Library :: struct {
     name:      string,
@@ -88,6 +89,7 @@ write_target_file :: proc(target_file: TargetFile) -> Error {
     }
 
     if len(target_file.depends) > 0 {
+
         target_file_content = fmt.tprintf(
             "%sdepends\n\t%s\n",
             target_file_content,
@@ -95,6 +97,7 @@ write_target_file :: proc(target_file: TargetFile) -> Error {
         )
     }
 
+    darwin.syscall_ftruncate(i32(target_file.fd), 0)
     if _, errno := os.write_at(target_file.fd, transmute([]byte)target_file_content, 0);
        errno != 0 {return Error.WriteError}
     return Error.None
@@ -117,7 +120,6 @@ read_target_file :: proc(target_name: string) -> (TargetFile, Error) {
     target_file := TargetFile {
         fd = fd,
     }
-
     data, ok := os.read_entire_file(fd)
     if !ok {return TargetFile{}, Error.ReadError}
 

@@ -21,6 +21,7 @@ Commands:
     depend   Makes building a target dependend on another target built
     log      Gives a status update on configuration of target
     ls       Lists all the targets in the directory
+    rm       Removes any compile element in the target via its hash
 
 Type "--help" after unclear command and recieve an in depth explanation`
 
@@ -118,7 +119,7 @@ Description:
     depend-target-name  The depend target name must be the name of an existing target.
                         The link command also adds target that the giving target depends on when linking to a target.`
 
-LOG_CMD_DESC :: `The log command gives a status update on the configuration of the target.
+LOG_CMD_DESC :: `The log command gives a status update on the configuration of the target. It also shows a hash for each compile element.
 
 Usage:
     
@@ -133,6 +134,20 @@ LS_CMD_DESC :: `The ls command lists all targets in the directory.
 Usage:
 
     tango ls`
+
+RM_CMD_DESC :: `The rm command removes can remove any compile element in a target via its hash. Get the hash with the log command.
+
+Usage:
+
+    tango rm [target-name] [hash] {remove-option}
+
+Description:
+
+    target-name    The target name must be the name of an existing target.
+    hash           The hash must be the hash of any compile element in the target 
+                   (source-files, source-directoies, include-paths, dynamically and statically linked libraries and dependencies).
+                   The log command gives you those hashes.
+    remove-option  The remove option can be omitted, but if you want to remove an element by force use the --force option.`
 
 print_desc_panic :: proc(desc: string) {
     fmt.println(desc)

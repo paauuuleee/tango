@@ -3,6 +3,7 @@ package main
 import "core:c"
 import "core:c/libc"
 import "core:fmt"
+import "core:hash"
 import "core:os"
 import path "core:path/filepath"
 import "core:slice"
@@ -53,6 +54,14 @@ init_tango :: proc() -> Error {
     if os.is_dir(tango_dir) {return Error.AlreadyInitError}
     os.make_directory(tango_dir, 0o0755)
     return Error.None
+}
+
+write_and_close :: proc(target_file: TargetFile) {
+    err := write_target_file(target_file)
+    msg_panic_if(err, .WriteError, "Cannot write to tango file.")
+
+    err = close_target_file(target_file)
+    msg_panic_if(err, .CloseError, "Cannot close tango file.")
 }
 
 construct_depend_list :: proc(target_file: TargetFile) -> [dynamic]TargetFile {
@@ -337,6 +346,50 @@ write_libraries :: proc(libs: []Library) -> []string {
     }
 
     return fmts
+}
+
+hash_elems :: proc(elems: []string) -> []u64 {
+    hashes := make([]u64, len(elems))
+    for elem, i in elems {
+        hashes[i] = hash.murmur64a(transmute([]u8)elem)
+    }
+    return hashes
+}
+
+log_hashed_elems :: proc(elems: []string) -> []string {
+    hashes := hash_elems(elems)
+    results := make([]string, len(elems))
+    for elem, i in elems {
+        results[i] = fmt.tprintf("%s \033[0m[\033[0;35m%x\033[0m]", elem, hashes[i])
+    }
+    return results
+}
+
+hash_lib_elems :: proc(elems: []Library) -> []u64 {
+    hashes := make([]u64, len(elems))
+    for elem, i in elems {
+        hashes[i] = hash.murmur64a(transmute([]u8)fmt.tprintf("%s %s %s", elem.abs_path, elem.name, elem.link_opts))
+    }
+    return hashes
+}
+
+log_hashed_lib_elems :: proc(elems: []Library, target_path: string) -> []string {
+    hashes := hash_lib_elems(elems)
+    results := make([]string, len(elems))
+    for elem, i in elems {
+        if elem.abs_path == "system" {
+            results[i] = fmt.tprintf("\033[0;31mSystem:lib%s \033[0m[\033[0;35m%x\033[0m]", elem.name, hashes[i])
+            continue
+        }
+
+        rel_path, err := path.rel(target_path, elem.abs_path)
+        if err != path.Relative_Error.None {msg_panic("Cannot determine relative path.")}
+        path := fmt.tprintf("@executable_path/%s", rel_path)
+
+        if elem.link_opts == "absolute" {path = elem.abs_path}
+        results[i] = fmt.tprintf("\033[0;31m%s/lib%s.dylib \033[0m[\033[0;35m%x\033[0m]", path, elem.name, hashes[i])
+    }
+    return results
 }
 
 possible_target_name :: proc(name: string) -> bool {

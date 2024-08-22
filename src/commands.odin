@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:os"
 import path "core:path/filepath"
 import "core:slice"
+import "core:strconv"
 import "core:strings"
 
 exec_init_cmd :: proc() {
@@ -261,11 +262,19 @@ exec_link_cmd :: proc() {
     switch os.args[4] 
     {
     case "--static":
-        append(&target_file.archives, lib_path)
+        if !slice.contains(target_file.archives[:], lib_path) {
+            append(&target_file.archives, lib_path)
+        }
     case "--absolute":
-        append(&target_file.libraries, Library{path.stem(path.base(lib_path))[3:], path.dir(lib_path), "absolute"})
+        lib := Library{path.stem(path.base(lib_path))[3:], path.dir(lib_path), "absolute"}
+        if !slice.contains(target_file.libraries[:], lib) {
+            append(&target_file.libraries, lib)
+        }
     case "--relative":
-        append(&target_file.libraries, Library{path.stem(path.base(lib_path))[3:], path.dir(lib_path), "relative"})
+        lib := Library{path.stem(path.base(lib_path))[3:], path.dir(lib_path), "relative"}
+        if !slice.contains(target_file.libraries[:], lib) {
+            append(&target_file.libraries, lib)
+        }
     case:
         msg_panic("Option has to --static, --absolute or --relative")
     }
@@ -350,47 +359,48 @@ exec_log_cmd :: proc() {
         target_type = "Static library"
     }
 
+    log_source := log_hashed_elems(target_file.source[:])
     source := ""
     if len(target_file.source) == 0 {source = "[]"}
-     else {source = fmt.tprintf("%s", strings.join(target_file.source[:], ",\n                         "))}
+     else {source = fmt.tprintf("%s", strings.join(log_source, ",\n                         "))}
 
+    log_src_dir := log_hashed_elems(target_file.src_dir[:])
     src_dir := ""
     if len(target_file.src_dir) == 0 {src_dir = "[]"}
-     else {src_dir = fmt.tprintf("%s", strings.join(target_file.src_dir[:], ",\n                         "))}
+     else {src_dir = fmt.tprintf(
+            "\033[0;34m%s\033[0m",
+            strings.join(log_src_dir, "\033[0m,\n                         \033[0;34m"),
+        )}
 
+    log_includes := log_hashed_elems(target_file.includes[:])
     includes := ""
     if len(target_file.includes) == 0 {includes = "[]"}
-     else {includes = fmt.tprintf("%s", strings.join(target_file.includes[:], ",\n                         "))}
+     else {includes = fmt.tprintf(
+            "\033[0;34m%s\033[0m",
+            strings.join(log_includes, "\033[0m,\n                         \033[0;34m"),
+        )}
 
+    log_archives := log_hashed_elems(target_file.archives[:])
     archives := ""
     if len(target_file.archives) == 0 {archives = "[]"}
-     else {archives = fmt.tprintf("%s", strings.join(target_file.archives[:], ",\n                         "))}
+     else {archives = fmt.tprintf("%s", strings.join(log_archives, ",\n                         "))}
 
+    log_depends := log_hashed_elems(target_file.depends[:])
     depends := ""
     if len(target_file.depends) == 0 {depends = "[]"}
-     else {depends = fmt.tprintf("%s", strings.join(target_file.depends[:], ",\n                         "))}
+     else {depends = fmt.tprintf(
+            "\033[0;33m%s\033[0m",
+            strings.join(log_depends, "\033[0m,\n                         \033[0;33m"),
+        )}
 
-
-    libraries := "[]"
-    if len(target_file.libraries) > 0 {
-        libraries = ""
-        for lib in target_file.libraries {
-            if libraries != "" {libraries = fmt.tprintf("%s,\n                         ", libraries)}
-            if lib.abs_path == "system" {
-                libraries = fmt.tprintf("%sLibrary: System:lib%s", libraries, lib.name)
-                continue
-            }
-            rel_path, err := path.rel(target_file.directory, lib.abs_path)
-            if err != path.Relative_Error.None {msg_panic("Cannot determine relative path.")}
-            path := fmt.tprintf("@executable_path/%s", rel_path)
-            if lib.link_opts == "absolute" {path = lib.abs_path}
-            libraries = fmt.tprintf("%sLibrary: %s/lib%s.dylib", libraries, path, lib.name)
-        }
-    }
+    log_libraries := log_hashed_lib_elems(target_file.libraries[:], target_file.directory)
+    libraries := ""
+    if len(target_file.libraries) == 0 {libraries = "[]"}
+     else {libraries = fmt.tprintf("%s", strings.join(log_libraries, ",\n                         "))}
 
     fmt.printf(
-        "Logged target:           %s\n" +
-        "Compile destination:     %s\n" +
+        "Logged target:           \033[0;33m%s\033[0m\n" +
+        "Compile destination:     \033[0;34m%s\033[0m\n" +
         "Target type:             %s\n" +
         "C source files:          %s\n" +
         "C source directory:      %s\n" +
@@ -448,4 +458,138 @@ exec_ls_cmd :: proc() {
     }
 
     fmt.printf("%s", output)
+}
+
+exec_rm_cmd :: proc() {
+    force := false
+    if len(os.args) == 5 && os.args[4] == "--force" {
+        force = true
+    }
+     else if len(os.args) != 4 {
+        if len(os.args) == 3 && os.args[2] == "--help" {print_desc_exit(RM_CMD_DESC)}
+        print_desc_panic(RM_CMD_DESC)
+    }
+
+    if !possible_target_name(os.args[2]) {
+        msg_panic(
+            "The target name must consist of only engish letters and arabic digits. " +
+            "The leading character must be a letter.",
+        )
+    }
+
+    target_file, err := read_target_file(os.args[2])
+    msg_panic_if(err, Error.NonExistError, "Given target does not exists.")
+    msg_panic_if(err, Error.OpenError, "Cannot open tango file.")
+    msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
+    msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
+
+    rm_hash, ok := strconv.parse_u64_of_base(os.args[3], 16)
+    if !ok {msg_panic("Second argument is not a valid hash.")}
+
+    source_hash := hash_elems(target_file.source[:])
+    src_dir_hash := hash_elems(target_file.src_dir[:])
+    includes_hash := hash_elems(target_file.includes[:])
+    archives_hash := hash_elems(target_file.archives[:])
+    libraries_hash := hash_lib_elems(target_file.libraries[:])
+    depends_hash := hash_elems(target_file.depends[:])
+
+    for h, i in source_hash {
+        if h == rm_hash {
+            unordered_remove(&target_file.source, i)
+            write_and_close(target_file)
+            return
+        }
+    }
+
+    for h, i in src_dir_hash {
+        if h == rm_hash {
+            unordered_remove(&target_file.src_dir, i)
+            write_and_close(target_file)
+            return
+        }
+    }
+
+    for h, i in includes_hash {
+        if h == rm_hash {
+            unordered_remove(&target_file.includes, i)
+            write_and_close(target_file)
+            return
+        }
+    }
+
+    for h, i in archives_hash {
+        if h == rm_hash {
+            unordered_remove(&target_file.archives, i)
+            write_and_close(target_file)
+            return
+        }
+    }
+
+    for h, i in libraries_hash {
+        if h == rm_hash {
+            unordered_remove(&target_file.libraries, i)
+            write_and_close(target_file)
+            return
+        }
+    }
+
+    for h, i in depends_hash {
+        if h == rm_hash {
+            if !force {
+                depend_target_file: TargetFile
+                depend_target_file, err = read_target_file(target_file.depends[i])
+                msg_panic_if(
+                    err,
+                    Error.NonExistError,
+                    "Target corresponding to the hash does not exists. To remove add --force option.",
+                )
+                msg_panic_if(err, Error.OpenError, "Cannot open dependency tango file. To remove add --force option.")
+                msg_panic_if(
+                    err,
+                    Error.ReadError,
+                    "Cannot read dependency tango file contents. To remove add --force option.",
+                )
+                msg_panic_if(
+                    err,
+                    Error.ParseError,
+                    "Cannot parse dependency tango file contents. To remove add --force option.",
+                )
+
+                if depend_target_file.type == "static" {
+                    depend_archive := fmt.tprint("%s/lib%s.a", depend_target_file.directory, depend_target_file.name)
+                    for archive in target_file.archives {
+                        if archive == depend_archive {
+                            msg_panic(
+                                "Cannot remove dependency because it is required to build the static library: %s. " +
+                                "To remove anyway add --force option.",
+                                archive,
+                            )
+                        }
+                    }
+                }
+                if depend_target_file.type == "shared" {
+                    for lib in target_file.libraries {
+                        if lib.name == depend_target_file.name && lib.abs_path == depend_target_file.directory {
+                            rel_path, rel_err := path.rel(target_file.directory, lib.abs_path)
+                            if rel_err != path.Relative_Error.None {msg_panic("Cannot determine relative path.")}
+                            path := lib.abs_path
+                            if lib.link_opts == "relative" {
+                                path = fmt.tprintf("@executable_path/%s", rel_path)
+                            }
+                            msg_panic(
+                                "Cannot remove dependency because it is required to build the shared library: %s. " +
+                                "To remove anyway add --force option.",
+                                fmt.tprintf("%s/lib%s.dylib", path, lib.name),
+                            )
+                        }
+                    }
+                }
+            }
+            unordered_remove(&target_file.depends, i)
+            write_and_close(target_file)
+            return
+        }
+    }
+
+    msg_panic("Remove hash does not correspond to any compilation element of given target.")
 }
