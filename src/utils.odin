@@ -185,12 +185,19 @@ compile :: proc(target_file: TargetFile) {
     }
 
     if target_file.type == "exec" {
-        cmd = fmt.tprintf("%s -o %s/%s -Wall -Werror", cmd, target_file.directory, target_file.name)
+        cmd = fmt.tprintf(
+            "%s -o %s/%s",
+            /* -Wall -Werror" */ // TODO: Add an options field to TargetFile structure and also add an comp-opts command to tango so the user can decide what compile options to use
+            cmd,
+            target_file.directory,
+            target_file.name,
+        )
     }
 
     if target_file.type == "shared" {
         cmd = fmt.tprintf(
-            "%s -o %s/lib%s.dylib -dynamiclib -Wall -Werror",
+            "%s -o %s/lib%s.dylib -dynamiclib",
+            /* -Wall -Werror" */
             cmd,
             target_file.directory,
             target_file.name,
@@ -257,7 +264,12 @@ compile_static :: proc(target_file: TargetFile) {
     for src, i in source {
         object_files[i] = fmt.tprintf("%s.o", path.stem(target_file.source[i]))
     }
-    gcc_cmd = fmt.tprintf("%s %s -c -Wall -Werror", gcc_cmd, strings.join(source[:], " "))
+    gcc_cmd = fmt.tprintf(
+        "%s %s -c",
+        /* -Wall -Werror" */
+        gcc_cmd,
+        strings.join(source[:], " "),
+    )
 
     if len(target_file.includes) > 0 {
         gcc_cmd = fmt.tprintf("%s -I%s", gcc_cmd, strings.join(target_file.includes[:], " -I"))
