@@ -160,142 +160,18 @@ sort_depend_list :: proc(sorted_depend_list: ^[dynamic]TargetFile, unsorted_rema
 }
 
 compile :: proc(target_file: TargetFile) {
-    if target_file.type == "static" {
-        compile_static(target_file)
-        return
+    objects, rm_cmd := compile_objects(target_file)
+
+    switch target_file.type {
+    case "shared":
+        compile_shared(target_file, objects)
+    case "static":
+        compile_static(target_file, objects)
+    case "exec":
+        compile_exec(target_file, objects)
     }
 
-    source := make([dynamic]string, 0, len(target_file.source))
-    defer delete(source)
-    append(&source, ..target_file.source[:])
-
-    for dir in target_file.src_dir {
-        source_files, err := path.glob(fmt.tprintf("%s/*.c", dir))
-        if err != path.Match_Error.None {msg_panic("Cannot read source directory %s.", dir)}
-        append(&source, ..source_files)
-    }
-
-    cmd := "gcc"
-
-    if len(source) < 1 {msg_panic("Target has to have at least one source file to be compiled")}
-    cmd = fmt.tprintf("%s %s", cmd, strings.join(source[:], " "))
-
-    if len(target_file.archives) > 0 {
-        cmd = fmt.tprintf("%s %s", cmd, strings.join(target_file.archives[:], " "))
-    }
-
-    if target_file.type == "exec" {
-        cmd = fmt.tprintf(
-            "%s -o %s/%s",
-            /* -Wall -Werror" */ // TODO: Add an options field to TargetFile structure and also add an comp-opts command to tango so the user can decide what compile options to use
-            cmd,
-            target_file.directory,
-            target_file.name,
-        )
-    }
-
-    if target_file.type == "shared" {
-        cmd = fmt.tprintf(
-            "%s -o %s/lib%s.dylib -dynamiclib",
-            /* -Wall -Werror" */
-            cmd,
-            target_file.directory,
-            target_file.name,
-        )
-    }
-
-    if len(target_file.includes) > 0 {
-        cmd = fmt.tprintf("%s -I%s", cmd, strings.join(target_file.includes[:], " -I"))
-    }
-
-    if len(target_file.libraries) > 0 {
-        cmd = fmt.tprintf("%s %s", cmd, strings.join(wlist_libraries(target_file.libraries[:])[:], " "))
-    }
-
-    fmt.println(cmd)
-    libc.system(strings.clone_to_cstring(cmd))
-
-    for lib in target_file.libraries {
-        if lib.abs_path == "system" {continue}
-        install_name := get_install_name(lib)
-        install_cmd := "install_name_tool -change"
-        switch lib.link_opts {
-        case "absolute":
-            install_cmd = fmt.tprintf("%s %s %s/lib%s.dylib", install_cmd, install_name, lib.abs_path, lib.name)
-        case "relative":
-            rel_path, rel_err := path.rel(target_file.directory, lib.abs_path)
-            if rel_err !=
-               path.Relative_Error.None {msg_panic("Cannot determine relative path between executable and library.")}
-            install_cmd = fmt.tprintf(
-                "%s %s @executable_path/%s/lib%s.dylib",
-                install_cmd,
-                install_name,
-                rel_path,
-                lib.name,
-            )
-        }
-        if target_file.type == "exec" {
-            install_cmd = fmt.tprintf("%s %s/%s", install_cmd, target_file.directory, target_file.name)
-        }
-        if target_file.type == "shared" {
-            install_cmd = fmt.tprintf("%s %s/lib%s.dylib", install_cmd, target_file.directory, target_file.name)
-        }
-        fmt.println(install_cmd)
-        libc.system(strings.clone_to_cstring(install_cmd))
-    }
-}
-
-compile_static :: proc(target_file: TargetFile) {
-    gcc_cmd := "gcc"
-
-    source := make([dynamic]string, 0, len(target_file.source))
-    defer delete(source)
-    append(&source, ..target_file.source[:])
-
-    for dir in target_file.src_dir {
-        source_files, err := path.glob(fmt.tprintf("%s/*.c", dir))
-        if err != path.Match_Error.None {msg_panic("Cannot read source directory %s.", dir)}
-        append(&source, ..source_files)
-    }
-
-    if len(source) < 1 {msg_panic("Target has to have at least one source file to be compiled.")}
-
-    object_files := make([]string, len(source))
-    for src, i in source {
-        object_files[i] = fmt.tprintf("%s.o", path.stem(target_file.source[i]))
-    }
-    gcc_cmd = fmt.tprintf(
-        "%s %s -c",
-        /* -Wall -Werror" */
-        gcc_cmd,
-        strings.join(source[:], " "),
-    )
-
-    if len(target_file.includes) > 0 {
-        gcc_cmd = fmt.tprintf("%s -I%s", gcc_cmd, strings.join(target_file.includes[:], " -I"))
-    }
-
-    lib_cmd := "libtool -static -o"
-    lib_cmd = fmt.tprintf(
-        "%s %s/lib%s.a %s",
-        lib_cmd,
-        target_file.directory,
-        target_file.name,
-        strings.join(object_files, " "),
-    )
-
-    lib_cmd = fmt.tprintf("%s %s", lib_cmd, strings.join(target_file.archives[:], " "))
-
-    if len(target_file.libraries) > 0 {
-        lib_cmd = fmt.tprintf("%s %s", lib_cmd, strings.join(wlist_libraries(target_file.libraries[:])[:], " "))
-    }
-
-    fmt.println(gcc_cmd)
-    libc.system(strings.clone_to_cstring(gcc_cmd))
-    fmt.println(lib_cmd)
-    libc.system(strings.clone_to_cstring(lib_cmd))
-
-    rm_cmd := fmt.tprintf("rm %s", strings.join(object_files, " "))
+    fmt.println(rm_cmd)
     libc.system(strings.clone_to_cstring(rm_cmd))
 
     for lib in target_file.libraries {
@@ -317,11 +193,103 @@ compile_static :: proc(target_file: TargetFile) {
                 lib.name,
             )
         }
-        install_cmd = fmt.tprintf("%s %s/lib%s.a", install_cmd, target_file.directory, target_file.name)
+        binary: string
+        switch target_file.type {
+        case "exec":
+            binary = fmt.tprintf("%s/%s", target_file.directory, target_file.name)
+        case "shared":
+            binary = fmt.tprintf("%s/lib%s.dylib", target_file.directory, target_file.name)
+        case "static":
+            binary = fmt.tprintf("%s/lib%s.a", target_file.directory, target_file.name)
+        }
+        install_cmd = fmt.tprintf("%s %s", install_cmd, binary)
         fmt.println(install_cmd)
         libc.system(strings.clone_to_cstring(install_cmd))
     }
 }
+
+compile_shared :: proc(target_file: TargetFile, objects: []string) {
+    cmd := "clang -shared"
+    cmd = fmt.tprintf("%s %s", cmd, strings.join(objects[:], " "))
+
+    if len(target_file.archives) > 0 {
+        cmd = fmt.tprintf("%s %s", cmd, strings.join(target_file.archives[:], " "))
+    }
+
+    cmd = fmt.tprintf("%s -o %s/lib%s.dylib", cmd, target_file.directory, target_file.name)
+
+    if len(target_file.libraries) > 0 {
+        cmd = fmt.tprintf("%s %s", cmd, strings.join(wlist_libraries(target_file.libraries[:])[:], " "))
+    }
+
+    fmt.println(cmd)
+    libc.system(strings.clone_to_cstring(cmd))
+}
+
+compile_exec :: proc(target_file: TargetFile, objects: []string) {
+    cmd := "clang"
+    cmd = fmt.tprintf("%s %s", cmd, strings.join(objects[:], " "))
+
+    if len(target_file.archives) > 0 {
+        cmd = fmt.tprintf("%s %s", cmd, strings.join(target_file.archives[:], " "))
+    }
+
+    cmd = fmt.tprintf("%s -o %s/%s", cmd, target_file.directory, target_file.name)
+
+    if len(target_file.libraries) > 0 {
+        cmd = fmt.tprintf("%s %s", cmd, strings.join(wlist_libraries(target_file.libraries[:])[:], " "))
+    }
+
+    fmt.println(cmd)
+    libc.system(strings.clone_to_cstring(cmd))
+}
+
+compile_static :: proc(target_file: TargetFile, objects: []string) {
+    cmd := "libtool -static -o"
+    cmd = fmt.tprintf("%s %s/lib%s.a %s", cmd, target_file.directory, target_file.name, strings.join(objects, " "))
+
+    if len(target_file.archives) > 0 {
+        cmd = fmt.tprintf("%s %s", cmd, strings.join(target_file.archives[:], " "))
+    }
+
+    if len(target_file.libraries) > 0 {
+        cmd = fmt.tprintf("%s %s", cmd, strings.join(wlist_libraries(target_file.libraries[:])[:], " "))
+    }
+
+    fmt.println(cmd)
+    libc.system(strings.clone_to_cstring(cmd))
+}
+
+compile_objects :: proc(target_file: TargetFile) -> ([]string, string) {
+    cc_cmd := "gcc"
+
+    source := make([dynamic]string, 0, len(target_file.source))
+    defer delete(source)
+    append(&source, ..target_file.source[:])
+    for dir in target_file.src_dir {
+        source_files, err := path.glob(fmt.tprintf("%s/*.c", dir))
+        if err != path.Match_Error.None {msg_panic("Cannot read source directory %s.", dir)}
+        append(&source, ..source_files)
+    }
+    if len(source) < 1 {msg_panic("Target has to have at least one source file to be compiled.")}
+
+    objects := make([]string, len(source))
+    for src, i in source {
+        objects[i] = fmt.tprintf("%s.o", path.stem(source[i]))
+    }
+    rm_cmd := fmt.tprintf("rm %s", strings.join(objects, " "))
+
+    cc_cmd = fmt.tprintf("%s %s -c", cc_cmd, strings.join(source[:], " "))
+    if len(target_file.includes) > 0 {
+        cc_cmd = fmt.tprintf("%s -I%s", cc_cmd, strings.join(target_file.includes[:], " -I"))
+    }
+
+    fmt.println(cc_cmd)
+    libc.system(strings.clone_to_cstring(cc_cmd))
+
+    return objects, rm_cmd
+}
+
 
 get_install_name :: proc(lib: Library) -> string {
     otool_cmd := fmt.tprintf("otool -D %s/lib%s.dylib | tr '\n' ' '", lib.abs_path, lib.name)
