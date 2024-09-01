@@ -171,7 +171,7 @@ compile :: proc(target_file: TargetFile) {
         compile_exec(target_file, objects)
     }
 
-    fmt.println(rm_cmd)
+    msg_note("Removing object files. [%s]", rm_cmd)
     libc.system(strings.clone_to_cstring(rm_cmd))
 
     for lib in target_file.libraries {
@@ -203,7 +203,7 @@ compile :: proc(target_file: TargetFile) {
             binary = fmt.tprintf("%s/lib%s.a", target_file.directory, target_file.name)
         }
         install_cmd = fmt.tprintf("%s %s", install_cmd, binary)
-        fmt.println(install_cmd)
+        msg_note("Changing the dynamic library search path. [%s]", install_cmd)
         libc.system(strings.clone_to_cstring(install_cmd))
     }
 }
@@ -222,7 +222,7 @@ compile_shared :: proc(target_file: TargetFile, objects: []string) {
         cmd = fmt.tprintf("%s %s", cmd, strings.join(wlist_libraries(target_file.libraries[:])[:], " "))
     }
 
-    fmt.println(cmd)
+    msg_note("Linking the final dynamic library. [%s]", cmd)
     libc.system(strings.clone_to_cstring(cmd))
 }
 
@@ -240,7 +240,7 @@ compile_exec :: proc(target_file: TargetFile, objects: []string) {
         cmd = fmt.tprintf("%s %s", cmd, strings.join(wlist_libraries(target_file.libraries[:])[:], " "))
     }
 
-    fmt.println(cmd)
+    msg_note("Linking the final executable. [%s]", cmd)
     libc.system(strings.clone_to_cstring(cmd))
 }
 
@@ -256,7 +256,7 @@ compile_static :: proc(target_file: TargetFile, objects: []string) {
         cmd = fmt.tprintf("%s %s", cmd, strings.join(wlist_libraries(target_file.libraries[:])[:], " "))
     }
 
-    fmt.println(cmd)
+    msg_note("Linking the final archive file. [%s]", cmd)
     libc.system(strings.clone_to_cstring(cmd))
 }
 
@@ -284,7 +284,7 @@ compile_objects :: proc(target_file: TargetFile) -> ([]string, string) {
         cc_cmd = fmt.tprintf("%s -I%s", cc_cmd, strings.join(target_file.includes[:], " -I"))
     }
 
-    fmt.println(cc_cmd)
+    msg_note("Compile c source files to object files. [%s]", cc_cmd)
     libc.system(strings.clone_to_cstring(cc_cmd))
 
     return objects, rm_cmd

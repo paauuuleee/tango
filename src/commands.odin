@@ -15,6 +15,8 @@ exec_init_cmd :: proc() {
 
     err := init_tango()
     msg_panic_if(err, Error.AlreadyInitError, "Directory is already initialised to tango.")
+
+    msg_success("Initialised directory to tango.")
 }
 
 exec_new_cmd :: proc() {
@@ -50,8 +52,17 @@ exec_new_cmd :: proc() {
     err = write_target_file(target_file)
     msg_panic_if(err, Error.WriteError, "Cannot write to tango file.")
 
+    msg_success(
+        "Created tango file %s for directory %s of target type %s.",
+        target_name,
+        target_directory,
+        target_type,
+    )
+
     err = close_target_file(target_file)
     msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
+
+    fmt.println("\033[0;32mSuccess:\033[0m Written to tango file.")
 }
 
 exec_add_cmd :: proc() {
@@ -73,17 +84,23 @@ exec_add_cmd :: proc() {
     msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
     msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
+    msg_success("Read tango config file %s.", target_file.name)
+
     src_file: string
     src_file, err = get_file_path_if(os.args[3], {".c"})
     msg_panic_if(err, Error.NotFileError, "The second argument must be a path to a c source file.")
     msg_panic_if(err, Error.AbsPathError, "Cannot determine absolute path for provided c source file.")
     msg_panic_if(err, Error.WrongTypeError, "Added file must be a path to a c source file.")
 
+    msg_success("Found c source file at %s.", src_file)
+
     if slice.contains(target_file.source[:], src_file) {msg_panic("Source file was already added to target.")}
     append(&target_file.source, src_file)
 
     err = write_target_file(target_file)
     msg_panic_if(err, Error.WriteError, "Cannot write to tango file.")
+
+    msg_success("Added c source file %s to tango config file %s.", src_file, target_file.name)
 
     err = close_target_file(target_file)
     msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
@@ -108,17 +125,22 @@ exec_add_dir_cmd :: proc() {
     msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
     msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
+    msg_success("Read tango config file %s.", target_file.name)
+
     dir_path: string
     dir_path, err = get_dir_path(os.args[3])
     msg_panic_if(err, Error.NotDirError, "Given directoy does not exist.")
     msg_panic_if(err, Error.AbsPathError, "Cannot determine absolute path of directory.")
 
-    if !slice.contains(target_file.src_dir[:], dir_path) {
-        append(&target_file.src_dir, dir_path)
-    }
+    msg_success("Found c source directory %s.", dir_path)
+
+    if slice.contains(target_file.src_dir[:], dir_path) {msg_panic("Source directory was already added to target.")}
+    append(&target_file.src_dir, dir_path)
 
     err = write_target_file(target_file)
     msg_panic_if(err, Error.WriteError, "Cannot write to tango file.")
+
+    msg_success("Added c source directory %s to tango config file %s.", dir_path, target_file.name)
 
     err = close_target_file(target_file)
     msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
@@ -145,10 +167,19 @@ exec_build_cmd :: proc() {
     msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
     msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
+    msg_success("Read tango config file %s.", target_file.name)
+
     depend_list := construct_depend_list(target_file)
     defer delete(depend_list)
 
-    for depend_target_file in depend_list {compile(depend_target_file)}
+    msg_success("Constructed dependecy list.")
+
+    for depend_target_file in depend_list {
+        msg_note("Compiling %s target.", depend_target_file.name)
+        compile(depend_target_file)
+        msg_success("Compiled %s target.", depend_target_file.name)
+    }
+
     for depend_target_file in depend_list {
         err = close_target_file(depend_target_file)
         msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
@@ -169,22 +200,28 @@ exec_inc_cmd :: proc() {
         )
     }
 
-    include, err := get_dir_path(os.args[3])
-    msg_panic_if(err, Error.NotDirError, "Target directory must be a path to a folder.")
-    msg_panic_if(err, Error.AbsPathError, "Cannot determine absolute path to directory.")
-
-    target_file: TargetFile
-    target_file, err = read_target_file(os.args[2])
+    target_file, err := read_target_file(os.args[2])
     msg_panic_if(err, Error.NonExistError, "Given target does not exists.")
     msg_panic_if(err, Error.OpenError, "Cannot open tango file.")
     msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
     msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
+
+    msg_success("Read tango config file %s.", target_file.name)
+
+    include: string
+    include, err = get_dir_path(os.args[3])
+    msg_panic_if(err, Error.NotDirError, "Target directory must be a path to a folder.")
+    msg_panic_if(err, Error.AbsPathError, "Cannot determine absolute path to directory.")
+
+    msg_success("Found include directory %s.", include)
 
     if slice.contains(target_file.includes[:], include) {msg_panic("Include path was already added to target.")}
     append(&target_file.includes, include)
 
     err = write_target_file(target_file)
     msg_panic_if(err, Error.WriteError, "Cannot write to tango file.")
+
+    msg_success("Added include directory %s to tango config file %s.", include, target_file.name)
 
     err = close_target_file(target_file)
     msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
@@ -209,6 +246,8 @@ exec_link_cmd :: proc() {
     msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
     msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
+    msg_success("Read tango config file %s.", target_file.name)
+
     lib_path := os.args[3]
     if strings.contains(os.args[3], "target:") {
         if !possible_target_name(os.args[3][7:]) {
@@ -224,8 +263,18 @@ exec_link_cmd :: proc() {
         msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
         msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
+        msg_success("Read linked tango config file %s.", target_file.name)
+
         if !slice.contains(target_file.depends[:], os.args[3][7:]) {
             append(&target_file.depends, os.args[3][7:])
+            msg_success("Added %s target to dependencies of %s target.", lib_target_file.name, target_file.name)
+        }
+         else {
+            msg_note(
+                "%s target is already added to the dependency list of %s targets.",
+                lib_target_file.name,
+                target_file.name,
+            )
         }
 
         if lib_target_file.type == "static" && os.args[4] == "--static" {
@@ -237,6 +286,8 @@ exec_link_cmd :: proc() {
          else {
             msg_panic("Provided linking target is not a static or shared target.")
         }
+
+        msg_success("Determined future library path %s.", lib_path)
 
         err = close_target_file(lib_target_file)
         msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
@@ -251,30 +302,37 @@ exec_link_cmd :: proc() {
         msg_panic_if(err, Error.AbsPathError, "Cannot determine absolute path to library.")
         msg_panic_if(err, Error.WrongTypeError, "Given file is not a library file.")
         if (os.args[4] == "--static" && path.ext(lib_path) != ".a") ||
-           (os.args[4] == "--relative" && (path.ext(lib_path) != ".dylib" && path.ext(lib_path) != ".so")) {
+           ((os.args[4] == "--relative" || os.args[4] == "--absolute") &&
+                   (path.ext(lib_path) != ".dylib" && path.ext(lib_path) != ".so")) {
             msg_panic(
                 "Static libraries must be linked with --static option" +
                 "and shared libraries with either --absolute or --relative option.",
             )
         }
+        msg_success("Found linked library %s.", lib_path)
     }
 
     switch os.args[4] 
     {
     case "--static":
-        if !slice.contains(target_file.archives[:], lib_path) {
-            append(&target_file.archives, lib_path)
-        }
+        if !slice.contains(
+            target_file.archives[:],
+            lib_path,
+        ) {msg_panic("Static library is already linked to target.")}
+        append(&target_file.archives, lib_path)
+        msg_success("Added library link of library %s to tango config file %s.", lib_path, target_file.name)
     case "--absolute":
         lib := Library{path.stem(path.base(lib_path))[3:], path.dir(lib_path), "absolute"}
         if !slice.contains(target_file.libraries[:], lib) {
             append(&target_file.libraries, lib)
         }
+        msg_success("Added library link %s to tango config file %s as an absolute link.", lib_path, target_file.name)
     case "--relative":
         lib := Library{path.stem(path.base(lib_path))[3:], path.dir(lib_path), "relative"}
         if !slice.contains(target_file.libraries[:], lib) {
             append(&target_file.libraries, lib)
         }
+        msg_success("Added library link %s to tango config file %s as an relative link.", lib_path, target_file.name)
     case:
         msg_panic("Option has to --static, --absolute or --relative")
     }
@@ -309,6 +367,8 @@ exec_depend_cmd :: proc() {
     msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
     msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
+    msg_success("Read tango config file %s.", target_file.name)
+
     depend_target_file: TargetFile
     depend_target_file, err = read_target_file(os.args[3])
     msg_panic_if(err, Error.NonExistError, "Dependency target does not exists.")
@@ -317,6 +377,8 @@ exec_depend_cmd :: proc() {
     err = close_target_file(depend_target_file)
     msg_panic_if(err, Error.CloseError, "Cannot close dependency tango file.")
 
+    msg_success("Found tango config file %s.", depend_target_file.name)
+
     if slice.contains(target_file.depends[:], os.args[3]) {
         msg_panic("Given dependecy target is already added to target.")
     }
@@ -324,6 +386,8 @@ exec_depend_cmd :: proc() {
 
     err = write_target_file(target_file)
     msg_panic_if(err, Error.WriteError, "Cannot write to tango file.")
+
+    msg_success("Added %s target to dependencies of %s target.", depend_target_file.name, target_file.name)
 
     err = close_target_file(target_file)
     msg_panic_if(err, Error.CloseError, "Cannot close tango file.")
@@ -434,6 +498,10 @@ exec_ls_cmd :: proc() {
     target_files_paths, match_err := path.glob(fmt.tprintf("%s/.tango/*.tango", cwd))
     if match_err != path.Match_Error.None {msg_panic("Cannot read .tango directory.")}
 
+    if len(target_files_paths) == 0 {
+        fmt.println("\033[0;35mNote:\033[0m No targets found in current directory.")
+    }
+
     target_files := make([]TargetFile, len(target_files_paths))
     for target_file_path, i in target_files_paths {
         target_name := path.stem(path.base(target_file_path))
@@ -452,7 +520,7 @@ exec_ls_cmd :: proc() {
     for target_file in target_files {
         output = fmt.tprintf("%s%s", output, target_file.name)
         if len(target_file.depends) > 0 {
-            output = fmt.tprintf("%s -> %s", output, strings.join(target_file.depends[:], ", "))
+            output = fmt.tprintf("%s -> \033[0;35m%s\033[0m", output, strings.join(target_file.depends[:], ", "))
         }
         output = fmt.tprintf("%s\n", output)
     }
@@ -483,6 +551,8 @@ exec_rm_cmd :: proc() {
     msg_panic_if(err, Error.ReadError, "Cannot read tango file contents.")
     msg_panic_if(err, Error.ParseError, "Cannot parse tango file contents.")
 
+    msg_success("Read tango config file %s.", target_file.name)
+
     rm_hash, ok := strconv.parse_u64_of_base(os.args[3], 16)
     if !ok {msg_panic("Second argument is not a valid hash.")}
 
@@ -495,40 +565,55 @@ exec_rm_cmd :: proc() {
 
     for h, i in source_hash {
         if h == rm_hash {
+            source_name := target_file.source[i]
             unordered_remove(&target_file.source, i)
             write_and_close(target_file)
+            msg_success("Removed c source file %s from tango config file %s.", source_name, target_file.name)
             return
         }
     }
 
     for h, i in src_dir_hash {
         if h == rm_hash {
+            src_dir_name := target_file.src_dir[i]
             unordered_remove(&target_file.src_dir, i)
             write_and_close(target_file)
+            msg_success("Removed c source directory %s from tango config file %s.", src_dir_name, target_file.name)
             return
         }
     }
 
     for h, i in includes_hash {
         if h == rm_hash {
+            include_dir_name := target_file.includes[i]
             unordered_remove(&target_file.includes, i)
             write_and_close(target_file)
+            msg_success("Removed include directory %s from tango config file %s.", include_dir_name, target_file.name)
             return
         }
     }
 
     for h, i in archives_hash {
         if h == rm_hash {
+            archive_name := target_file.archives[i]
             unordered_remove(&target_file.archives, i)
             write_and_close(target_file)
+            msg_success("Removed static library link %s from tango config file %s.", archive_name, target_file.name)
             return
         }
     }
 
     for h, i in libraries_hash {
         if h == rm_hash {
+            lib := target_file.libraries[i]
             unordered_remove(&target_file.libraries, i)
             write_and_close(target_file)
+            msg_success(
+                "Removed shared library link %s/lib%s.dylib form tango config file %s.",
+                lib.abs_path,
+                lib.name,
+                target_file.name,
+            )
             return
         }
     }
@@ -555,6 +640,8 @@ exec_rm_cmd :: proc() {
                     "Cannot parse dependency tango file contents. To remove add --force option.",
                 )
 
+                msg_success("Read dependency target file %s.", depend_target_file.name)
+
                 if depend_target_file.type == "static" {
                     depend_archive := fmt.tprint("%s/lib%s.a", depend_target_file.directory, depend_target_file.name)
                     for archive in target_file.archives {
@@ -577,16 +664,27 @@ exec_rm_cmd :: proc() {
                                 path = fmt.tprintf("@executable_path/%s", rel_path)
                             }
                             msg_panic(
-                                "Cannot remove dependency because it is required to build the shared library: %s. " +
+                                "Cannot remove dependency because it is required to build the shared library: %s/lib%s.dylib. " +
                                 "To remove anyway add --force option.",
-                                fmt.tprintf("%s/lib%s.dylib", path, lib.name),
+                                path,
+                                lib.name,
                             )
                         }
                     }
                 }
             }
+             else {
+                msg_warn(
+                    "With the --force flag library links that are tied to dependencies are ignored. " +
+                    "This may break the build process.",
+                )
+            }
+
+            depend_name := target_file.depends[i]
             unordered_remove(&target_file.depends, i)
             write_and_close(target_file)
+
+            msg_success("Removed target dependency %s from tango config file %s", depend_name, target_file.name)
             return
         }
     }
