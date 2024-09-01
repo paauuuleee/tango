@@ -10,8 +10,8 @@ Currently, I only support a macOS version but a Linux version is planned soon an
 
 1. Clone this directory to the desired location on your machine. 
 `git clone https://github.com/paauuuleee/tango.git`
-2. Change directory into newly cloned directory and execute `./install.zsh` (This will append the `tango/bin` directory to your `$PATH` environment variable, your machine can execute `tango` form every directory. The installation changes are going to be stored in your `~/.zshrc` file.)
-
+2. The `tango` executable lives in the `/bin` directory of the repository. Add this directory to you `$PATH` environment variable.
+`export PATH=path-to-repository/bin:$PATH`
 ## Documentation
 
 Tango works simuilar to other build tools. You type the `$ tango` command and follow up with a desired subcommand. By typing `$ tango --help` you get a description of the Usage of `tango` and all its available subcommands.
