@@ -229,8 +229,8 @@ exec_inc_cmd :: proc() {
 
 exec_link_cmd :: proc() {
     if len(os.args) != 5 {
-        if len(os.args) == 3 && os.args[2] == "--help" {print_desc_exit(INC_CMD_DESC)}
-        print_desc_panic(INC_CMD_DESC)
+        if len(os.args) == 3 && os.args[2] == "--help" {print_desc_exit(LINK_CMD_DESC)}
+        print_desc_panic(LINK_CMD_DESC)
     }
 
     if !possible_target_name(os.args[2]) {
