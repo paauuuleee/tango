@@ -315,10 +315,7 @@ exec_link_cmd :: proc() {
     switch os.args[4] 
     {
     case "--static":
-        if !slice.contains(
-            target_file.archives[:],
-            lib_path,
-        ) {msg_panic("Static library is already linked to target.")}
+        if slice.contains(target_file.archives[:], lib_path) {msg_panic("Static library is already linked to target.")}
         append(&target_file.archives, lib_path)
         msg_success("Added library link of library %s to tango config file %s.", lib_path, target_file.name)
     case "--absolute":
